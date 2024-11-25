@@ -1,0 +1,97 @@
+---
+title: "Essays_preprocessing"
+author: "Yujin Hwang"
+date: "2024-11-23"
+output: html_document
+---
+# load the data
+```{r}
+setwd("~/0_PSU/511/GroupProject/Essays")
+```
+
+```{r}
+jojo1 <- readLines("Jojo_1.txt", encoding="UTF-8")
+jojo2 <- readLines("Jojo_2.txt", encoding="UTF-8")
+jojo3 <- readLines("Jojo_3.txt", encoding="UTF-8")
+jojo4 <- readLines("Jojo_4.txt", encoding="UTF-8")
+jojo5 <- readLines("Jojo_5.txt", encoding="UTF-8")
+jojo6 <- readLines("Jojo_6.txt", encoding="UTF-8")
+jojo7 <- readLines("Jojo_7.txt", encoding="UTF-8")
+jojo8 <- readLines("Jojo_8.txt", encoding="UTF-8")
+jojo9 <- readLines("Jojo_9.txt", encoding="UTF-8")
+jojo10 <- readLines("Jojo_10.txt", encoding="UTF-8")
+jojo11 <- readLines("Jojo_11.txt", encoding="UTF-8")
+jojo12 <- readLines("Jojo_12.txt", encoding="UTF-8")
+jojo13 <- readLines("Jojo_13.txt", encoding="UTF-8")
+jojo14 <- readLines("Jojo_14.txt", encoding="UTF-8")
+jojo15 <- readLines("Jojo_15.txt", encoding="UTF-8")
+
+# yujin1 <- readLines("Yujin_1.txt", encoding="UTF-8")
+# yujin2 <- readLines("Yujin_2.txt", encoding="UTF-8")
+yujin3 <- readLines("Yujin_3.txt", encoding="UTF-8")
+yujin4 <- readLines("Yujin_4.txt", encoding="UTF-8")
+yujin5 <- readLines("Yujin_5.txt", encoding="UTF-8")
+yujin6 <- readLines("Yujin_6.txt", encoding="UTF-8")
+yujin7 <- readLines("Yujin_7.txt", encoding="UTF-8")
+yujin8 <- readLines("Yujin_8.txt", encoding="UTF-8")
+yujin9 <- readLines("Yujin_9.txt", encoding="UTF-8")
+yujin10 <- readLines("Yujin_10.txt", encoding="UTF-8")
+yujin11 <- readLines("Yujin_11.txt", encoding="UTF-8")
+yujin12 <- readLines("Yujin_12.txt", encoding="UTF-8")
+yujin13 <- readLines("Yujin_13.txt", encoding="UTF-8")
+yujin14 <- readLines("Yujin_14.txt", encoding="UTF-8")
+yujin15 <- readLines("Yujin_15.txt", encoding="UTF-8")
+yujin16 <- readLines("Yujin_16.txt", encoding="UTF-8")
+yujin17 <- readLines("Yujin_17.txt", encoding="UTF-8")
+yujin18 <- readLines("Yujin_18.txt", encoding="UTF-8")
+# yujin19 <- readLines("Yujin_19.txt", encoding="UTF-8")
+# yujin20 <- readLines("Yujin_20.txt", encoding="UTF-8")
+
+
+
+# These are Yujin's but let's say that we do not know the author
+mystery1 <- readLines("Yujin_1.txt", encoding="UTF-8")
+mystery2 <- readLines("Yujin_2.txt", encoding="UTF-8")
+mystery3 <- readLines("Yujin_19.txt", encoding="UTF-8")
+mystery4 <- readLines("Yujin_20.txt", encoding="UTF-8")
+```
+
+# function to delete all punctuations and to 
+```{r}
+tokenize <- function(text) {
+  lower <- tolower(text)
+  remove_punc <- gsub("[[:punct:][:blank:]]+", " ", lower)
+  words <- strsplit(remove_punc, "\\s+")
+  freqtable <- data.frame(sort(table(words)))
+  result <- setNames(as.data.frame(t(freqtable[-1])), freqtable[[1]])
+  return(result)
+}
+```
+
+# Perform rbind
+```{r}
+freqlist <- list(tokenize(jojo1), tokenize(jojo2), tokenize(jojo3), tokenize(jojo4), tokenize(jojo5),
+                 tokenize(jojo6), tokenize(jojo7), tokenize(jojo8), tokenize(jojo9), tokenize(jojo10),
+                 tokenize(jojo11), tokenize(jojo12), tokenize(jojo13), tokenize(jojo14), tokenize(jojo15),
+                 tokenize(yujin3), tokenize(yujin4), tokenize(yujin5), tokenize(yujin6), tokenize(yujin7),
+                 tokenize(yujin8), tokenize(yujin9), tokenize(yujin10), tokenize(yujin11), tokenize(yujin12),
+                 tokenize(yujin13), tokenize(yujin14), tokenize(yujin15), tokenize(yujin16), tokenize(yujin17),
+                 tokenize(yujin18),
+                 tokenize(mystery1), tokenize(mystery2), tokenize(mystery3), tokenize(mystery4))
+
+total_freqtable <- bind_rows(freqlist)
+total_freqtable[is.na(total_freqtable)] <- 0
+```
+
+```{r}
+freqtable_jojo <- total_freqtable[1:15,]
+freqtable_yujin <- total_freqtable[16:31,]
+freqtable_mystery <- total_freqtable[32:35,]
+
+write.csv(freqtable_jojo, "frequency_table_Jojo.csv")
+write.csv(freqtable_yujin, "frequency_table_Yujin.csv")
+write.csv(freqtable_mystery, "frequency_table_mystery.csv")
+```
+
+
+

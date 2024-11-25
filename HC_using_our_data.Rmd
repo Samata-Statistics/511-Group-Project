@@ -1,0 +1,198 @@
+---
+title: "Apply it to essay data"
+author: "Yujin Hwang"
+date: "2024-11-23"
+output: html_document
+---
+---
+title: "Project Replication 511"
+author: "Maria F. Anglero"
+date: "2024-11-14"
+output: pdf_document
+---
+
+```{r}
+# Directory
+setwd("~/0_PSU/511/GroupProject/Essays")
+```
+
+```{r}
+# Library
+library(ggplot2)
+```
+
+
+```{r}
+# Load the data
+Jojo <- read.csv("frequency_table_Jojo.csv", header=T, row.names=1)
+
+Yujin <- read.csv("frequency_table_Yujin.csv", header=T, row.names=1)
+
+mystery <- read.csv("frequency_table_mystery.csv", header=T, row.names=1)
+```
+
+```{r}
+# Checking if both Jojo and Yujin dataframe have the same word order
+sum(colnames(Jojo) != colnames(Yujin)) # Ideally, this value should be 0
+```
+
+
+```{r}
+# HC-Discrepancy Function
+hc_discrepancy <- function(word_freq_table1, word_freq_table2, gamma0 = 0.3) {
+  # Step 1: Compute total word frequencies
+  n1 <- sum(word_freq_table1)
+  n2 <- sum(word_freq_table2)
+  
+  # Initialize variables
+  vocab <- names(word_freq_table1)
+  p_values <- numeric(length(vocab))
+  
+  # Step 2: Iterate over words
+  for (i in seq_along(vocab)) {
+    x <- as.numeric(round(word_freq_table1[i]))  # Ensure integer
+    nw <- as.numeric(round(word_freq_table1[i] + word_freq_table2[i]))  # Ensure integer
+    pw <- as.numeric(ifelse((n1 + n2 - nw) > 0, (n1 - word_freq_table1[i]) / (n1 + n2 - nw), 0.5))
+    
+    # Binomial test
+    p_values[i] <- ifelse(nw > 0, binom.test(x, nw, pw, alternative = "two.sided")$p.value, 1)
+  }
+  
+  # Step 3: Sort p-values and calculate z-scores
+  N <- length(vocab)
+  sorted_p_values <- sort(p_values)
+  
+  #Calculating Z_i's
+  z <- numeric(length(vocab))
+  for (i in seq_along(vocab)) {
+    z[i] <- sqrt(N) * (i/N - sorted_p_values[i]) / sqrt((i/N) * (1 - i/N))
+  }
+  
+  imin <- which(sorted_p_values > 1/N)[1]
+  i_star <- which.max(z[imin:(gamma0*N)]) + (imin-1)
+  
+  # Step 5: Compute HC value
+  HC_star <- z[i_star]
+  discriminating_words <- vocab[p_values <= sorted_p_values[i_star]]
+  
+  list(HC_star = HC_star, discriminating_words = discriminating_words)
+  
+}
+```
+
+```{r}
+# Function to calculate HC-discrepancy for each document
+# for freq_table and corpus_table, insert the entire frequency_table.csv file that you read above, without any further preprocessing
+calculate_hc_discrepancy <- function(document_index, freq_table, corpus_table, gamma0 = 0.3) {
+  
+  # If the document and the corpus is from the same author, remove the document from the corpus
+  if (all.equal(Jojo, Jojo)) {
+    corpus_table <- corpus_table[-document_index,]
+  }
+  
+  # Perform column sum for corpus
+  corpus_table_sum <- apply(corpus_table, 2, sum)
+  
+  freq_table_i <- freq_table[document_index,]
+  
+  # Compute HC discrepancy
+  hc_result <- hc_discrepancy(freq_table_i, corpus_table_sum, gamma0)
+  return(hc_result$HC_star)
+}
+```
+
+```{r}
+# Compute HC discrepancies for Jojo's documents
+Jojo_hc_x <- sapply(1:nrow(Jojo), function(i) {
+  calculate_hc_discrepancy(i, Jojo, Jojo)
+})
+Jojo_hc_y <- sapply(1:nrow(Jojo), function(i) {
+  calculate_hc_discrepancy(i, Jojo, Yujin)
+})
+
+# Compute HC discrepancies for Yujin's documents
+Yujin_hc_x <- sapply(1:nrow(Yujin), function(i) {
+  calculate_hc_discrepancy(i, Yujin, Jojo)
+})
+Yujin_hc_y <- sapply(1:nrow(Yujin), function(i) {
+  calculate_hc_discrepancy(i, Yujin, Yujin)
+})
+
+# Compute HC discrepancies for mystery documents
+mystery_hc_x <- sapply(1:nrow(mystery), function(i) {
+  calculate_hc_discrepancy(i, mystery, Jojo)
+})
+mystery_hc_y <- sapply(1:nrow(mystery), function(i) {
+  calculate_hc_discrepancy(i, mystery, Yujin)
+})
+
+```
+
+```{r}
+# Combine results into a data frame for plotting
+
+# excluding the mystery papers
+hc_data1 <- data.frame(
+  x = c(Jojo_hc_x, Yujin_hc_x),
+  y = c(Jojo_hc_y, Yujin_hc_y),
+  author = c(rep("Jojo", nrow(Jojo)), rep("Yujin", nrow(Yujin)))
+)
+hc_data1$author <- factor(hc_data1$author, levels = c("Jojo", "Yujin"))
+
+# incuding the mystery papers
+hc_data2 <- data.frame(
+  x = c(Jojo_hc_x, Yujin_hc_x, mystery_hc_x),
+  y = c(Jojo_hc_y, Yujin_hc_y, mystery_hc_y),
+  author = c(rep("Jojo", nrow(Jojo)),
+             rep("Yujin", nrow(Yujin)),
+             rep("mystery", nrow(mystery)))
+)
+hc_data2$author <- factor(hc_data2$author, levels = c("Jojo", "Yujin", "mystery"))
+
+```
+
+```{r}
+# Plot HC discrepancies
+
+
+group_colors <- c("Jojo"="#C77CFF", "Yujin"="#7CAE00", "mystery"="darkgrey")
+group_shapes <- c("Jojo"="circle", "Yujin"="triangle", "mystery"="square")
+
+# For the plot on page 1240 (excluding mystery papers)
+page1240_newdata <-
+  ggplot(hc_data1, aes(x = x, y = y, color = author, shape=author)) +
+    lims(x=c(1,11), y=c(1,11))+
+    geom_point(size = 3, alpha = 1)+
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+    labs(
+      title = "HC-Discrepancy of Writings by Two Cohort Members",
+      x = "HC-discrepancy with respect to Jojo's corpus",
+      y = "HC-discrepancy with respect to Yujin's corpus",
+      color = "Author",
+      shape = "Author"
+    ) +
+    scale_color_manual(values=group_colors)+
+    scale_shape_manual(values=group_shapes)+
+    coord_fixed()+
+    theme_minimal()
+ggsave("page1240_newdata.png", page1240_newdata)
+
+# For the plot on page 1245 (including mystery papers)
+page1245_newdata <-
+  ggplot(hc_data2, aes(x = x, y = y, color = author, shape=author)) +
+    lims(x=c(1,11), y=c(1,11))+
+    geom_point(size = 3, alpha = 1)+
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+    labs(
+      title = "HC-Discrepancy of Writings by Two Cohort Members (including mystery author)",
+      x = "HC-discrepancy with respect to Jojo's corpus",
+      y = "HC-discrepancy with respect to Yujin's corpus",
+      color = "Author",
+      shape = "Author"
+    ) +
+    scale_color_manual(values=group_colors)+
+    scale_shape_manual(values=group_shapes)+
+    coord_fixed()+
+    theme_minimal()
+ggsave("page1245_newdata.png", page1245_newdata)
+```

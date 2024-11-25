@@ -1,0 +1,192 @@
+---
+title: "Project Replication 511"
+author: "Maria F. Anglero"
+date: "2024-11-14"
+output: pdf_document
+---
+
+```{r}
+# Directory
+setwd("~/0_PSU/511/GroupProject/511_Group_Project_main/511_Group_Project_main")
+```
+
+```{r}
+# Library
+library(ggplot2)
+```
+
+
+```{r}
+# Load the data
+Hamilton <- read.csv("frequency_table_Hamilton.csv", header=T, row.names=1)
+
+Madison <- read.csv("frequency_table_Madison.csv", header=T, row.names=1)
+
+Disputed <- read.csv("frequency_table_disputed.csv", header=T, row.names=1)
+```
+
+```{r}
+# Checking if both Hamilton and Madison dataframe have the same word order
+sum(colnames(Hamilton) != colnames(Madison)) # Ideally, this value should be 0
+```
+
+
+```{r}
+# HC-Discrepancy Function
+hc_discrepancy <- function(word_freq_table1, word_freq_table2, gamma0 = 0.3) {
+  # Step 1: Compute total word frequencies
+  n1 <- sum(word_freq_table1)
+  n2 <- sum(word_freq_table2)
+  
+  # Initialize variables
+  vocab <- names(word_freq_table1)
+  p_values <- numeric(length(vocab))
+  
+  # Step 2: Iterate over words
+  for (i in seq_along(vocab)) {
+    x <- as.numeric(round(word_freq_table1[i]))  # Ensure integer
+    nw <- as.numeric(round(word_freq_table1[i] + word_freq_table2[i]))  # Ensure integer
+    pw <- as.numeric(ifelse((n1 + n2 - nw) > 0, (n1 - word_freq_table1[i]) / (n1 + n2 - nw), 0.5))
+    
+    # Binomial test
+    p_values[i] <- ifelse(nw > 0, binom.test(x, nw, pw, alternative = "two.sided")$p.value, 1)
+  }
+  
+  # Step 3: Sort p-values and calculate z-scores
+  N <- length(vocab)
+  sorted_p_values <- sort(p_values)
+  
+  #Calculating Z_i's
+  z <- numeric(length(vocab))
+  for (i in seq_along(vocab)) {
+    z[i] <- sqrt(N) * (i/N - sorted_p_values[i]) / sqrt((i/N) * (1 - i/N))
+  }
+  
+  imin <- which(sorted_p_values > 1/N)[1]
+  i_star <- which.max(z[imin:(gamma0*N)]) + (imin-1)
+  
+  # Step 5: Compute HC value
+  HC_star <- z[i_star]
+  discriminating_words <- vocab[p_values <= sorted_p_values[i_star]]
+  
+  list(HC_star = HC_star, discriminating_words = discriminating_words)
+  
+}
+```
+
+```{r}
+# Function to calculate HC-discrepancy for each document
+# for freq_table and corpus_table, insert the entire frequency_table.csv file that you read above, without any further preprocessing
+calculate_hc_discrepancy <- function(document_index, freq_table, corpus_table, gamma0 = 0.3) {
+  
+  # If the document and the corpus is from the same author, remove the document from the corpus
+  if (all.equal(Hamilton, Hamilton)) {
+    corpus_table <- corpus_table[-document_index,]
+  }
+  
+  # Perform column sum for corpus
+  corpus_table_sum <- apply(corpus_table, 2, sum)
+  
+  freq_table_i <- freq_table[document_index,]
+  
+  # Compute HC discrepancy
+  hc_result <- hc_discrepancy(freq_table_i, corpus_table_sum, gamma0)
+  return(hc_result$HC_star)
+}
+```
+
+```{r}
+# Compute HC discrepancies for Hamilton's documents
+hamilton_hc_x <- sapply(1:nrow(Hamilton), function(i) {
+  calculate_hc_discrepancy(i, Hamilton, Hamilton)
+})
+hamilton_hc_y <- sapply(1:nrow(Hamilton), function(i) {
+  calculate_hc_discrepancy(i, Hamilton, Madison)
+})
+
+# Compute HC discrepancies for Madison's documents
+madison_hc_x <- sapply(1:nrow(Madison), function(i) {
+  calculate_hc_discrepancy(i, Madison, Hamilton)
+})
+madison_hc_y <- sapply(1:nrow(Madison), function(i) {
+  calculate_hc_discrepancy(i, Madison, Madison)
+})
+
+# Compute HC discrepancies for disputed documents
+disputed_hc_x <- sapply(1:nrow(Disputed), function(i) {
+  calculate_hc_discrepancy(i, Disputed, Hamilton)
+})
+disputed_hc_y <- sapply(1:nrow(Disputed), function(i) {
+  calculate_hc_discrepancy(i, Disputed, Madison)
+})
+
+```
+
+```{r}
+# Combine results into a data frame for plotting
+
+# excluding the disputed papers
+hc_data1 <- data.frame(
+  x = c(hamilton_hc_x, madison_hc_x),
+  y = c(hamilton_hc_y, madison_hc_y),
+  author = c(rep("Hamilton", nrow(Hamilton)), rep("Madison", nrow(Madison)))
+)
+hc_data1$author <- factor(hc_data1$author, levels = c("Hamilton", "Madison"))
+
+# incuding the disputed papers
+hc_data2 <- data.frame(
+  x = c(hamilton_hc_x, madison_hc_x, disputed_hc_x),
+  y = c(hamilton_hc_y, madison_hc_y, disputed_hc_y),
+  author = c(rep("Hamilton", nrow(Hamilton)),
+             rep("Madison", nrow(Madison)),
+             rep("disputed", nrow(Disputed)))
+)
+hc_data2$author <- factor(hc_data2$author, levels = c("Hamilton", "Madison", "disputed"))
+
+```
+
+```{r}
+# Plot HC discrepancies
+
+
+group_colors <- c("Hamilton"="#F8766D", "Madison"="#00BFC4", "disputed"="darkgrey")
+group_shapes <- c("Hamilton"="circle", "Madison"="triangle", "disputed"="square")
+
+# For the plot on page 1240 (excluding disputed papers)
+page1240 <-
+  ggplot(hc_data1, aes(x = x, y = y, color = author, shape=author)) +
+    lims(x=c(0,8), y=c(0,8))+
+    geom_point(size = 3, alpha = 1)+
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+    labs(
+      title = "HC-Discrepancy of Federalist Papers",
+      x = "HC-discrepancy with respect to Hamilton's corpus",
+      y = "HC-discrepancy with respect to Madison's corpus",
+      color = "Author",
+      shape = "Author"
+    ) +
+    scale_color_manual(values=group_colors)+
+    scale_shape_manual(values=group_shapes)+
+    coord_fixed()+
+    theme_minimal()
+ggsave("page1240.png", page1240)
+
+# For the plot on page 1245 (including disputed papers)
+page1245 <-
+  ggplot(hc_data2, aes(x = x, y = y, color = author, shape=author)) +
+    lims(x=c(0,8), y=c(0,8))+
+    geom_point(size = 3, alpha = 1)+
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+    labs(
+      title = "HC-Discrepancy of Federalist Papers (including disputed)",
+      x = "HC-discrepancy with respect to Hamilton's corpus",
+      y = "HC-discrepancy with respect to Madison's corpus",
+      color = "Author",
+      shape = "Author"
+    ) +
+    scale_color_manual(values=group_colors)+
+    scale_shape_manual(values=group_shapes)+
+    coord_fixed()+
+    theme_minimal()
+ggsave("page1245.png", page1245)
+```
